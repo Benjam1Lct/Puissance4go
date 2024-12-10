@@ -1,8 +1,10 @@
 package main
 
 import (
+	"github.com/hajimehoshi/ebiten/v2/audio"
 	"log"
 	"net"
+	"os"
 )
 
 // Structure de données pour représenter l'état courant du jeu.
@@ -29,12 +31,20 @@ type game struct {
 	restartOk          bool
 	nbJoueurConnecte   int
 	messageWaitRematch string
+	stateFrameIntro    int
+	mouseReleased      bool
+	debugMode          bool
+	audioContext       *audio.Context
+	audioPlayer        *audio.Player
+	audioFile          *os.File
 }
 
 // Constantes pour représenter la séquence de jeu actuelle (écran titre,
 // écran de sélection des couleurs, jeu, écran de résultats).
 const (
-	titleState int = iota
+	introStateLogo int = iota
+	introStateTexte
+	titleState
 	colorSelectState
 	playState
 	resultState

@@ -26,6 +26,7 @@ func connectToServer(g *game) {
 		g.errorConnection = "Erreur : Adresse incorrecte."
 		g.gameState = inputServerState // Retour à l'état de saisie
 		g.serverAddress = ""
+
 		return
 	}
 
@@ -197,6 +198,7 @@ func sendCursorUpdateToServer(conn net.Conn, color int) {
 }
 
 func (g *game) inputServerUpdate() bool {
+
 	// Réinitialiser l'adresse si une erreur est survenue
 	if g.connectionMessage == "Erreur : Adresse incorrecte. Entrez une nouvelle adresse." {
 		g.serverAddress = ""
@@ -205,12 +207,43 @@ func (g *game) inputServerUpdate() bool {
 
 	// Ajouter les caractères saisis
 	for _, char := range ebiten.AppendInputChars(nil) {
+		g.errorConnection = ""
 		g.serverAddress += string(char)
 	}
-	// Supprimer le dernier caractère (Backspace)
-	if inpututil.IsKeyJustPressed(ebiten.KeyBackspace) && len(g.serverAddress) > 0 {
-		g.serverAddress = g.serverAddress[:len(g.serverAddress)-1]
+	// Gérer le maintien de Backspace
+	backspacePressed := inpututil.KeyPressDuration(ebiten.KeyBackspace) > 0
+	if backspacePressed {
+		if inpututil.KeyPressDuration(ebiten.KeyBackspace) == 1 || (inpututil.KeyPressDuration(ebiten.KeyBackspace) > 30 && inpututil.KeyPressDuration(ebiten.KeyBackspace)%3 == 0) {
+			// Supprimer le dernier caractère si l'adresse n'est pas vide
+			if len(g.serverAddress) > 0 {
+				g.serverAddress = g.serverAddress[:len(g.serverAddress)-1]
+			}
+		}
 	}
+
+	// Obtenir les coordonnées de la souris
+	mouseX, mouseY := ebiten.CursorPosition()
+
+	// Vérifier si le clic est dans les limites du rectangle
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.mouseReleased {
+		// Dimensions du rectangle "JOUER"
+		smallRectWidth := 200
+		smallRectHeight := 80
+		smallRectX := (globalWidth - smallRectWidth) / 2
+		smallRectY := (80 - smallRectHeight) / 2
+
+		// Vérification des coordonnées
+		if mouseX >= smallRectX && mouseX <= smallRectX+smallRectWidth &&
+			mouseY >= smallRectY && mouseY <= smallRectY+smallRectHeight {
+			// Passer à l'état suivant
+			if g.serverAddress == "" {
+				g.serverAddress = "localhost:8080"
+			}
+			g.mouseReleased = false
+			return true
+		}
+	}
+
 	// Valider l'adresse (Entrée)
 	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
 		if g.serverAddress == "" {

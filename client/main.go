@@ -1,54 +1,40 @@
 package main
 
 import (
-	"log"
-
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/examples/resources/fonts"
-	"golang.org/x/image/font/opentype"
+	"log"
 )
-
-// Mise en place des polices d'écritures utilisées pour l'affichage.
-func init() {
-	tt, err := opentype.Parse(fonts.MPlus1pRegular_ttf)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	smallFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
-		Size: 30,
-		DPI:  72,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	largeFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
-		Size: 50,
-		DPI:  72,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-// Création d'une image annexe pour l'affichage des résultats.
-func init() {
-	offScreenImage = ebiten.NewImage(globalWidth, globalHeight)
-}
 
 // Création, paramétrage et lancement du jeu.
 func main() {
 
-	g := game{}
+	initResolution(true)
 
+	// Configurer la fenêtre pour utiliser cette résolution
+	ebiten.SetScreenClearedEveryFrame(true)
+	ebiten.SetWindowSize(globalWidth, globalHeight)
+	ebiten.SetWindowTitle("Programmation système : projet puissance 4")
+	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeDisabled)
+
+	// Passer en mode plein écran
+
+	g := game{}
+	g.gameState = introStateLogo
+	g.stateFrame = 0
 	g.restartOk = true
 	g.p2Color = -1
 	g.p1ColorValidate = -1
+	g.playerID = -1
 
-	ebiten.SetWindowTitle("Programmation système : projet puissance 4")
-	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+	// Initialiser les ressources nécessaires
+	g.initAudio()
+	defer g.closeAudio()
+	initFonts()
+	initImage()
+	initOffScreen()
+	initBackground()
 
+	// Lancer le jeu
 	if err := ebiten.RunGame(&g); err != nil {
 		log.Fatal(err)
 	}

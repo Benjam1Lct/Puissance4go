@@ -8,9 +8,56 @@ import (
 
 // Mise à jour de l'état du jeu en fonction des entrées au clavier.
 func (g *game) Update() error {
+
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		x, y := ebiten.CursorPosition()
+		var icon *ebiten.Image
+		if ebiten.IsFullscreen() {
+			icon = iconWindowed
+		} else {
+			icon = iconFullscreen
+		}
+		// Facteur d'échelle pour redimensionner le logo
+		iconScale := 0.07 // Réduire à 50% de la taille d'origine
+
+		// Calculer la taille de l'icône redimensionnée
+		originalWidth, originalHeight := icon.Size()
+		scaledWidth := float64(originalWidth) * iconScale
+		scaledHeight := float64(originalHeight) * iconScale
+
+		// Définir la position du bouton (centré horizontalement en haut à droite)
+		buttonX := globalWidth - int(scaledWidth) - 19
+		buttonY := 8
+
+		// Vérifier si le clic est sur le bouton
+		if x >= buttonX && x <= buttonX+int(scaledWidth) && y >= buttonY && y <= buttonY+int(scaledHeight) {
+			// Basculer entre plein écran et fenêtré
+			ebiten.SetFullscreen(!ebiten.IsFullscreen())
+			// Si en plein écran, ajustez la résolution cible
+			// Ajuster les dimensions globales
+			adjustGlobalDimensions()
+			initFonts() // Recalculer les polices après le changement
+
+			// Redimensionner la fenêtre en conséquence
+			ebiten.SetWindowSize(globalWidth, globalHeight)
+
+		}
+	}
+
+	g.UpdateDebug()
 	g.stateFrame++
 
 	switch g.gameState {
+	case introStateLogo:
+		if g.introStateLogo() {
+			g.gameState = introStateTexte
+			g.stateFrame = 0
+		}
+	case introStateTexte:
+		if g.introStateTexte() {
+			g.gameState = titleState
+			g.stateFrame = 0
+		}
 	case titleState:
 		if g.titleUpdate() {
 			g.gameState = inputServerState
@@ -71,12 +118,81 @@ func (g *game) Update() error {
 		}
 	}
 
+	if !ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+		g.mouseReleased = true // Souris relâchée
+	}
+
 	return nil
+}
+
+func (g *game) UpdateDebug() error {
+	// ... votre code update existant ...
+
+	// Activer/désactiver le mode debug avec F3 par exemple
+	if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
+		println("c'est fait")
+
+		g.debugMode = !g.debugMode
+		print(g.debugMode)
+	}
+
+	return nil
+}
+
+func (g *game) introStateLogo() bool {
+	// Incrémenter le compteur de frames
+	g.stateFrame++
+	totalDuration := fadeInDuration + holdDuration + fadeOutDuration + invisibleHoldDuration
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+		return true
+	}
+
+	if g.stateFrame >= totalDuration {
+		return true
+	}
+
+	return false
+}
+
+func (g *game) introStateTexte() bool {
+	// Incrémenter le compteur de frames
+	g.stateFrame++
+	totalDuration := fadeInDuration + holdDuration + fadeOutDuration + invisibleHoldDuration
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+		return true
+	}
+
+	if g.stateFrame >= totalDuration {
+		return true
+	}
+
+	return false
 }
 
 // Mise à jour de l'état du jeu à l'écran titre.
 func (g *game) titleUpdate() bool {
 	g.stateFrame = g.stateFrame % globalBlinkDuration
+	// Obtenir les coordonnées de la souris
+	mouseX, mouseY := ebiten.CursorPosition()
+
+	// Vérifier si le clic est dans les limites du rectangle
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.mouseReleased {
+		// Dimensions du rectangle "JOUER"
+		smallRectWidth := 200
+		smallRectHeight := 80
+		smallRectX := (globalWidth - smallRectWidth) / 2
+		smallRectY := (80 - smallRectHeight) / 2
+
+		// Vérification des coordonnées
+		if mouseX >= smallRectX && mouseX <= smallRectX+smallRectWidth &&
+			mouseY >= smallRectY && mouseY <= smallRectY+smallRectHeight {
+			// Passer à l'état suivant
+			g.mouseReleased = false
+			g.gameState = inputServerState // Remplacez "nextState" par l'état que vous voulez
+		}
+	}
 	return inpututil.IsKeyJustPressed(ebiten.KeyEnter)
 }
 
@@ -112,7 +228,7 @@ func (g *game) colorSelectUpdate() bool {
 	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
 		if g.p1Color == g.p2Color {
 			log.Println("Erreur : Couleur déjà sélectionnée par l'autre joueur. Choisissez une autre couleur.")
-			g.errorMessage = "Couleur deja choisi par l'autre joueur."
+			g.errorMessage = "Couleur deja choisi par l'autre joueur"
 			return false // Ne pas permettre de continuer
 		}
 		// Envoyer la couleur au serveur
@@ -171,6 +287,24 @@ func (g *game) p2Update() (int, int) {
 func (g *game) resultUpdate() bool {
 	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
 		return true
+	}
+
+	mouseX, mouseY := ebiten.CursorPosition()
+
+	// Vérifier si le clic est dans les limites du rectangle
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.mouseReleased {
+		// Dimensions du rectangle "JOUER"
+		smallRectWidth := 200
+		smallRectHeight := 80
+		smallRectX := (globalWidth - smallRectWidth) / 2
+		smallRectY := (80 - smallRectHeight) / 2
+
+		// Vérification des coordonnées
+		if mouseX >= smallRectX && mouseX <= smallRectX+smallRectWidth &&
+			mouseY >= smallRectY && mouseY <= smallRectY+smallRectHeight {
+			// Passer à l'état suivant
+			return true // Remplacez "nextState" par l'état que vous voulez
+		}
 	}
 	return false
 }
