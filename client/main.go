@@ -16,19 +16,11 @@ func main() {
 	ebiten.SetWindowTitle("Programmation système : projet puissance 4")
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeDisabled)
 
-	// Passer en mode plein écran
-
+	// Initialiser le jeu
 	g := game{}
-	g.gameState = introStateLogo
-	g.stateFrame = 0
-	g.restartOk = true
-	g.p2Color = -1
-	g.p1ColorValidate = -1
-	g.playerID = -1
+	g.initGame()
 
 	// Initialiser les ressources nécessaires
-	g.initAudio()
-	defer g.closeAudio()
 	initFonts()
 	initImage()
 	initOffScreen()

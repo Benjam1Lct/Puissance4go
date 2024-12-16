@@ -4,8 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hajimehoshi/ebiten/v2/text"
 	"log"
 	"net"
 	"strings"
@@ -90,7 +89,10 @@ func handleServerMessage(msg Message, g *game) {
 			if id, ok := payload["id"].(float64); ok {
 				g.playerID = int(id)
 				log.Printf("ID reçu : %d\n", g.playerID)
-				sendJSONMessage(g.conn, "ready", nil) // Informer le serveur que le client est prêt
+				err := sendJSONMessage(g.conn, "ready", nil)
+				if err != nil {
+					return
+				} // Informer le serveur que le client est prêt
 			}
 		}
 	case "color":
@@ -109,14 +111,22 @@ func handleServerMessage(msg Message, g *game) {
 					log.Printf("Mouvement reçu : (%d, %d)\n", int(x), int(y))
 					updated, _ := g.updateGrid(p2Token, int(x))
 					if updated {
-						finished, result := g.checkGameEnd(int(x), int(y))
+						finished, result, posWinnerCheck := g.checkGameEnd(int(x), int(y))
+						if posWinnerCheck != nil {
+							g.posWinner = posWinnerCheck
+							log.Println("posWinnerCheck", g.posWinner)
+						}
 						if finished {
 							g.result = result
 							if g.result == p1wins {
+								g.nbPartieWin++
 								g.turn = p2Turn
 							} else if g.result == p2wins {
+								g.nbPartieAdversaireWin++
 								g.turn = p1Turn
 							} else {
+								g.nbPartieWin++
+								g.nbPartieAdversaireWin++
 								g.turn = g.firstPlayer
 							}
 							g.gameState = resultState
@@ -130,6 +140,20 @@ func handleServerMessage(msg Message, g *game) {
 				}
 			}
 		}
+	case "chat":
+		if payload, ok := msg.Payload.(map[string]interface{}); ok {
+			if text, ok := payload["text"].(string); ok {
+				if id, ok := payload["id"].(float64); ok {
+					if id == float64(g.playerID) {
+						g.addChatMessage(text, "You:")
+					} else {
+						g.addChatMessage(text, "Other:")
+						g.chatNewMessage = true
+					}
+				}
+			}
+		}
+
 	case "rematch_waiting":
 		// Afficher le message d'attente pour le rematch
 		if payload, ok := msg.Payload.(map[string]interface{}); ok {
@@ -150,7 +174,9 @@ func handleServerMessage(msg Message, g *game) {
 				g.connectionMessage = message
 				g.serverReady = true
 				g.gameState = colorSelectState
-				g.nbJoueurConnecte++
+				if g.nbJoueurConnecte < 2 {
+					g.nbJoueurConnecte++
+				}
 				log.Println(message)
 			}
 		}
@@ -168,8 +194,7 @@ func handleServerMessage(msg Message, g *game) {
 
 				// Mettre à jour l'état du jeu
 				g.connectionMessage = "La partie commence. Préparez-vous !"
-				g.gameReady = true
-				g.gameState = playState
+				g.gameState = shifumiState
 
 				log.Printf("Le joueur %d commence la partie. Votre tour : %v\n", int(starterID), g.turn == p1Turn)
 			} else {
@@ -184,9 +209,244 @@ func handleServerMessage(msg Message, g *game) {
 				g.p2CursorColor = int(color)
 			}
 		}
+	case "token_update":
+		if payload, ok := msg.Payload.(map[string]interface{}); ok {
+			if position, ok := payload["position"].(float64); ok {
+				g.adversaryTokenPosition = int(position)
+				log.Printf("Position adversaire: %d\n", g.adversaryTokenPosition)
+			}
+		}
+	case "sent_history":
+		if payload, ok := msg.Payload.(map[string]interface{}); ok {
+			// Re-sérialiser le payload en JSON
+			jsonData, err := json.Marshal(payload)
+			if err != nil {
+				log.Printf("Erreur lors de la re-sérialisation de l'historique : %v\n", err)
+				return
+			}
+
+			// Désérialiser dans une map[string]Coordinate
+			tempHistory := make(map[string]Coordinate)
+			if err := json.Unmarshal(jsonData, &tempHistory); err != nil {
+				log.Printf("Erreur lors du décodage de l'historique : %v\n", err)
+				return
+			}
+
+			// Convertir les clés string en int et stocker dans votre variable globale
+			for keyStr, coord := range tempHistory {
+				var keyInt int
+				_, err := fmt.Sscanf(keyStr, "%d", &keyInt)
+				if err != nil {
+					log.Printf("Erreur de conversion de clé '%s' en int : %v\n", keyStr, err)
+					continue
+				}
+				history[keyInt] = coord
+			}
+
+			log.Println("Historique mis à jour côté client :", history)
+		} else {
+			log.Println("Payload invalide pour 'sent_history'")
+		}
+	case "other_disconnected":
+		log.Println("L'autre joueur s'est deconnecté")
+		g.disconnectClient()
+	case "selected":
+		if payload, ok := msg.Payload.(map[string]interface{}); ok {
+			if selected, ok := payload["selected"].(string); ok {
+				g.selected = selected
+				log.Printf("Sélection reçue : %s\n", selected)
+			}
+		}
+	case "shifumi_result":
+		if payload, ok := msg.Payload.(map[string]interface{}); ok {
+			if result, ok := payload["result"].(string); ok {
+				// Stocker le résultat
+				g.shifumiResult = result
+				g.showShifumiResult = true
+				g.shifumiResultTimer = 120 // environ 2 secondes à 60 FPS
+
+				// Gérer les sélections des joueurs
+				if p1, ok := payload["player1"].(map[string]interface{}); ok {
+					if p1Selection, ok := p1["selection"].(string); ok {
+						if g.playerID == 1 {
+							g.selected = p1Selection
+						} else {
+							g.adversaryChoice = p1Selection
+						}
+					}
+				}
+				if p2, ok := payload["player2"].(map[string]interface{}); ok {
+					if p2Selection, ok := p2["selection"].(string); ok {
+						if g.playerID == 2 {
+							g.selected = p2Selection
+						} else {
+							g.adversaryChoice = p2Selection
+						}
+					}
+				}
+
+				// Déterminer le résultat local
+				g.determineShifumiWinner()
+
+				if result == "draw" {
+					// En cas d'égalité, rester dans l'état shifumi pour rejouer
+					g.gameState = shifumiState
+					g.selected = "" // Réinitialiser la sélection pour le prochain tour
+					g.adversaryChoice = ""
+				}
+				log.Printf("Résultat Shifumi - Joueur: %s, Adversaire: %s, Résultat: %s\n",
+					g.selected, g.adversaryChoice, g.shifumiResult)
+			}
+		}
+	case "shifumi_complete":
+		if payload, ok := msg.Payload.(map[string]interface{}); ok {
+			if winnerID, ok := payload["winner"].(float64); ok {
+				if int(winnerID) == g.playerID {
+					g.turn = p1Turn
+					g.firstPlayer = p1Turn
+				} else {
+					g.turn = p2Turn
+					g.firstPlayer = p2Turn
+				}
+				// Passer à l'état de sélection des couleurs
+
+				g.gameReady = true
+				g.gameState = playState
+				g.connectionMessage = "Shifumi terminé ! Sélectionnez votre couleur."
+				log.Printf("Le joueur %d a gagné le shifumi et commence la partie\n", int(winnerID))
+			}
+		}
 	default:
 		log.Printf("Type de message inconnu : %s\n", msg.Type)
+
 	}
+}
+
+func (g *game) disconnectClient() {
+	err := g.conn.Close()
+	if err != nil {
+		return
+	}
+
+	g.isReset = true
+
+	//init
+	g.chatNewMessage = false
+	g.stateFrame = 0
+	g.restartOk = true
+	g.p2Color = -1
+	g.p1ColorValidate = -1
+	g.playerID = -1
+	g.mouseReleased = true
+
+	//reset all
+	g.playerID = 0
+	g.resetGrid()
+	g.p1Color = 0
+	g.p2CursorColor = 0
+	g.turn = noToken
+	g.firstPlayer = noToken
+	g.tokenPosition = 0
+	g.result = 0
+	g.serverAddress = ""
+	g.serverReady = false
+	g.connectionMessage = ""
+	g.errorConnection = ""
+	g.gameReady = false
+	g.errorMessage = ""
+	g.nbJoueurConnecte = 0
+	g.messageWaitRematch = ""
+	g.mouseReleased = true
+	g.adversaryTokenPosition = g.tokenPosition
+	g.nbPartieWin = 0
+	g.nbPartieAdversaireWin = 0
+	g.chatMessages = []string{} // Historique des messages de chat
+	g.chatInput = ""
+	g.chatIsFocus = false
+	g.chatNewMessage = false
+}
+
+func (g *game) addChatMessage(message string, id string) {
+	// Récupérer l'horodatage actuel
+	timestamp := time.Now().Format("2006/01/02 15:04:05")
+
+	// Ajouter la date et l'heure au message
+	messageWithTimestamp := fmt.Sprintf("%s %s %s", timestamp, id, message)
+
+	// Découper le message pour qu'il respecte la largeur définie
+	messageWithTimestamp = truncateMessage(messageWithTimestamp, messageWidth+350)
+
+	// Ajouter le message avec l'horodatage à la liste
+	g.chatMessages = append(g.chatMessages, messageWithTimestamp)
+
+	// Limiter à 10 messages
+	g.limitChatHeight()
+
+}
+
+func truncateMessage(message string, maxWidth int) string {
+	words := strings.Split(message, " ")
+	var lines []string
+	currentLine := ""
+
+	for _, word := range words {
+		testLine := strings.TrimSpace(currentLine + " " + word)
+		if text.BoundString(smallFont, testLine).Dx() > maxWidth {
+			// Si currentLine est vide, le mot seul dépasse la largeur
+			if currentLine == "" {
+				lines = append(lines, word) // Ajouter directement le mot
+			} else {
+				lines = append(lines, strings.TrimSpace(currentLine))
+				currentLine = word
+			}
+		} else {
+			currentLine = testLine
+		}
+	}
+
+	// Ajouter la dernière ligne uniquement si elle n'est pas vide
+	if strings.TrimSpace(currentLine) != "" {
+		lines = append(lines, strings.TrimSpace(currentLine))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// Limiter la hauteur totale des messages dans la zone de texte
+func (g *game) limitChatHeight() {
+	maxHeight := 200 // Hauteur maximale autorisée pour la zone de texte
+	totalHeight := 0
+
+	// Calculer la hauteur totale des messages
+	for _, message := range g.chatMessages {
+		totalHeight += calculateMessageHeight(message, messageWidth+250)
+	}
+
+	// Supprimer les messages les plus anciens jusqu'à ce que la hauteur soit inférieure à maxHeight
+	for totalHeight > maxHeight && len(g.chatMessages) > 0 {
+		// Supprimer le message le plus ancien
+		oldMessage := g.chatMessages[0]
+		totalHeight -= calculateMessageHeight(oldMessage, messageWidth+250)
+		g.chatMessages = g.chatMessages[1:]
+	}
+}
+
+// Calculer la hauteur d'un message en fonction de son contenu et de la largeur définie
+func calculateMessageHeight(message string, maxWidth int) int {
+	lines := strings.Split(message, "\n")
+	return len(lines) * 20 // Chaque ligne fait 20 pixels de hauteur (ou ajustez selon votre font)
+}
+
+func sendChatMessage(conn net.Conn, text string) {
+	payload := ChatMessage{Text: text}
+	err := sendJSONMessage(conn, "chat", payload)
+	if err != nil {
+		log.Printf("Erreur lors de l'envoi du message de chat : %v\n", err)
+	}
+}
+
+func requestHistory(conn net.Conn) error {
+	return sendJSONMessage(conn, "require_history", nil)
 }
 
 func sendCursorUpdateToServer(conn net.Conn, color int) {
@@ -197,61 +457,18 @@ func sendCursorUpdateToServer(conn net.Conn, color int) {
 	}
 }
 
-func (g *game) inputServerUpdate() bool {
-
-	// Réinitialiser l'adresse si une erreur est survenue
-	if g.connectionMessage == "Erreur : Adresse incorrecte. Entrez une nouvelle adresse." {
-		g.serverAddress = ""
-		g.connectionMessage = ""
+func sendTokenUpdateToServer(conn net.Conn, position int) {
+	// Créer un payload contenant la position du curseur
+	payload := map[string]int{
+		"position": position,
 	}
 
-	// Ajouter les caractères saisis
-	for _, char := range ebiten.AppendInputChars(nil) {
-		g.errorConnection = ""
-		g.serverAddress += string(char)
+	// Envoyer un message JSON de type "cursor_update" avec la position
+	err := sendJSONMessage(conn, "token_update", payload)
+	if err != nil {
+		log.Printf("Erreur lors de l'envoi de la mise à jour du curseur : %v\n", err)
 	}
-	// Gérer le maintien de Backspace
-	backspacePressed := inpututil.KeyPressDuration(ebiten.KeyBackspace) > 0
-	if backspacePressed {
-		if inpututil.KeyPressDuration(ebiten.KeyBackspace) == 1 || (inpututil.KeyPressDuration(ebiten.KeyBackspace) > 30 && inpututil.KeyPressDuration(ebiten.KeyBackspace)%3 == 0) {
-			// Supprimer le dernier caractère si l'adresse n'est pas vide
-			if len(g.serverAddress) > 0 {
-				g.serverAddress = g.serverAddress[:len(g.serverAddress)-1]
-			}
-		}
-	}
-
-	// Obtenir les coordonnées de la souris
-	mouseX, mouseY := ebiten.CursorPosition()
-
-	// Vérifier si le clic est dans les limites du rectangle
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.mouseReleased {
-		// Dimensions du rectangle "JOUER"
-		smallRectWidth := 200
-		smallRectHeight := 80
-		smallRectX := (globalWidth - smallRectWidth) / 2
-		smallRectY := (80 - smallRectHeight) / 2
-
-		// Vérification des coordonnées
-		if mouseX >= smallRectX && mouseX <= smallRectX+smallRectWidth &&
-			mouseY >= smallRectY && mouseY <= smallRectY+smallRectHeight {
-			// Passer à l'état suivant
-			if g.serverAddress == "" {
-				g.serverAddress = "localhost:8080"
-			}
-			g.mouseReleased = false
-			return true
-		}
-	}
-
-	// Valider l'adresse (Entrée)
-	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-		if g.serverAddress == "" {
-			g.serverAddress = "localhost:8080"
-		}
-		return true
-	}
-	return false
+	log.Println("token envoyé au serveur")
 }
 
 func sendColorToServer(conn net.Conn, color int) {
@@ -272,17 +489,6 @@ func sendMoveToServer(conn net.Conn, x int, y int) {
 	log.Printf("Mouvement envoyé : (%d, %d)\n", x, y)
 }
 
-func endGame(g *game) {
-	if g.conn != nil {
-		err := sendJSONMessage(g.conn, "end", nil)
-		if err != nil {
-			log.Printf("Erreur lors de l'envoi de 'end' : %v\n", err)
-		} else {
-			log.Println("Message 'end' envoyé au serveur.")
-		}
-	}
-}
-
 func sendJSONMessage(conn net.Conn, messageType string, payload interface{}) error {
 	message := Message{
 		Type:    messageType,
@@ -300,4 +506,18 @@ func sendJSONMessage(conn net.Conn, messageType string, payload interface{}) err
 	}
 
 	return nil
+}
+
+// SelectedPayload représente les données de sélection à envoyer au serveur
+type SelectedPayload struct {
+	Selected string `json:"selected"`
+}
+
+func sendSelectedToServer(conn net.Conn, selected string) {
+	payload := SelectedPayload{Selected: selected}
+	err := sendJSONMessage(conn, "selected", payload)
+	if err != nil {
+		log.Printf("Erreur lors de l'envoi de la sélection : %v\n", err)
+	}
+	log.Printf("Sélection envoyée : %s\n", selected)
 }

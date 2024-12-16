@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"image/color"
+
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+
+	"log"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text"
@@ -12,13 +15,39 @@ import (
 
 // Affichage des graphismes à l'écran selon l'état actuel du jeu.
 func (g game) Draw(screen *ebiten.Image) {
-	if globalBackgroundImage != nil && g.gameState != introStateLogo && g.gameState != introStateTexte {
+	if g.gameState != introStateLogo && g.gameState != introStateTexte {
+		var image *ebiten.Image
+		if g.nbBackground == 0 {
+			image = background1
+		} else if g.nbBackground == 1 {
+			image = background3
+		} else if g.nbBackground == 2 {
+			image = background2
+		}
 		op := &ebiten.DrawImageOptions{}
 		op.GeoM.Scale(
-			float64(globalWidth)/float64(globalBackgroundImage.Bounds().Dx()),
-			float64(globalHeight)/float64(globalBackgroundImage.Bounds().Dy()),
+			float64(globalWidth)/float64(image.Bounds().Dx()),
+			float64(globalHeight)/float64(image.Bounds().Dy()),
 		)
-		screen.DrawImage(globalBackgroundImage, op)
+		screen.DrawImage(image, op)
+		if g.chatIsFocus {
+			g.errorMessageDisplay(screen, "Fermez le chat pour reprendre la partie")
+		}
+	}
+
+	if g.isReset {
+		g.errorMessageDisplay(screen, "L'autre joueur s'est déconnecté")
+	}
+
+	if g.debugMode {
+		// Exemple de changement d'état via une entrée utilisateur
+		if ebiten.IsKeyPressed(ebiten.KeyD) {
+			g.gameState = shifumiState // Changer vers l'état titre
+		} else if ebiten.IsKeyPressed(ebiten.Key2) {
+			g.gameState = playState // Changer vers l'état de jeu
+		} else if ebiten.IsKeyPressed(ebiten.Key3) {
+			g.gameState = resultState // Changer vers l'état de résultat
+		}
 	}
 
 	switch g.gameState {
@@ -28,6 +57,8 @@ func (g game) Draw(screen *ebiten.Image) {
 		g.drawIntroTexte(screen)
 	case titleState:
 		g.titleDraw(screen)
+	case themeState:
+		g.themeDraw(screen)
 	case inputServerState:
 		g.inputServerDraw(screen)
 	case waitingState:
@@ -38,11 +69,18 @@ func (g game) Draw(screen *ebiten.Image) {
 		g.playDraw(screen)
 	case resultState:
 		g.resultDraw(screen)
+	case replayState:
+		g.drawReplay(screen)
+	case shifumiState:
+		g.DrawShifumi(screen)
 	}
 
 	if g.gameState != introStateLogo && g.gameState != introStateTexte {
 		g.topMenu(screen)
 		g.drawFullscreenButton(screen)
+		if g.gameState != themeState {
+			g.drawNbPlayer(screen)
+		}
 	}
 
 	if g.debugMode {
@@ -65,10 +103,8 @@ func (g game) Draw(screen *ebiten.Image) {
 }
 
 func (g game) titleDraw(screen *ebiten.Image) {
-	// Définir la couleur du rectangle (#D9D9D9)
-	rectColor := color.NRGBA{R: 217, G: 217, B: 217, A: 255}
-
-	g.topMenuJoueur(screen)
+	g.drawThemeButton(screen)
+	g.topMenuButton(screen, "CONNEXION")
 
 	// Texte principal
 	mainText := "Puissance 4"
@@ -89,7 +125,7 @@ func (g game) titleDraw(screen *ebiten.Image) {
 	rect1Y := subTitle1Y - subTitle1Height + 20
 	rect1Width := subTitle1Width + 2*padding
 	rect1Height := subTitle1Height - 5
-	vector.DrawFilledRect(screen, float32(rect1X), float32(rect1Y), float32(rect1Width), float32(rect1Height), rectColor, true)
+	vector.DrawFilledRect(screen, float32(rect1X), float32(rect1Y), float32(rect1Width), float32(rect1Height), globalTextColorBright, true)
 
 	// Dessiner le texte pour le sous-titre 1
 	text.Draw(screen, subTitle1, smallFont, subTitle1X, subTitle1Y, globalTextColor)
@@ -105,13 +141,13 @@ func (g game) titleDraw(screen *ebiten.Image) {
 	rect2Y := subTitle2Y - subTitle2Height + 20
 	rect2Width := subTitle2Width + 2*padding
 	rect2Height := subTitle2Height - 5
-	vector.DrawFilledRect(screen, float32(rect2X), float32(rect2Y), float32(rect2Width), float32(rect2Height), rectColor, true)
+	vector.DrawFilledRect(screen, float32(rect2X), float32(rect2Y), float32(rect2Width), float32(rect2Height), globalTextColorBright, true)
 
 	// Dessiner le texte pour le sous-titre 2
 	text.Draw(screen, subTitle2, smallFont, subTitle2X, subTitle2Y, globalTextColor)
 
 	// Ajouter un message clignotant en bas de l'écran
-	blinkMessage := "Appuyez sur Entrée pour commencer"
+	blinkMessage := "Appuyez sur Entrée pour vous connectez"
 	blinkTextWidth, blinkTextHeight := getTextDimensions(blinkMessage, smallFont)
 	blinkX := (globalWidth - blinkTextWidth) / 2
 	blinkY := globalHeight - blinkTextHeight - 20 // 20 pixels de marge par rapport au bas
@@ -131,6 +167,7 @@ func (g game) titleDraw(screen *ebiten.Image) {
 }
 
 func (g *game) colorSelectDraw(screen *ebiten.Image) {
+
 	// Calculer la position de départ pour centrer la grille
 	gridWidth := globalNumColorCol * globalTileSize
 	gridHeight := globalNumColorLine * globalTileSize
@@ -229,7 +266,7 @@ func (g *game) colorSelectDraw(screen *ebiten.Image) {
 			screen,
 			centerX,
 			centerY,
-			(float32(globalTileSize)/2)-float32(globalCircleMargin)-2,
+			(float32(globalTileSize/2-globalCircleMargin) - 2),
 			globalTokenColors[numColor],
 			true,
 		)
@@ -245,10 +282,26 @@ func (g *game) colorSelectDraw(screen *ebiten.Image) {
 	if g.errorMessage != "" {
 		g.errorMessageDisplay(screen, g.errorMessage)
 	}
+
+	if g.chatIsFocus {
+		g.drawChat(screen)
+		g.drawCloseButton(screen)
+	} else {
+		g.drawChatButton(screen)
+	}
 }
 
 // Affichage des graphismes durant le jeu.
 func (g game) playDraw(screen *ebiten.Image) {
+	if g.chatIsFocus {
+		g.drawChat(screen)
+		g.drawCloseButton(screen)
+	} else {
+		g.drawChatButton(screen)
+	}
+
+	g.drawScore(screen)
+
 	// Calculer la position et les dimensions de la grille
 	gridWidth := globalTileSize * globalNumTilesX
 	gridHeight := globalTileSize * globalNumTilesY
@@ -281,11 +334,42 @@ func (g game) playDraw(screen *ebiten.Image) {
 	// Afficher le pion du joueur actif (au-dessus de la grille)
 	pionX := float32(startX + globalTileSize/2 + g.tokenPosition*globalTileSize)
 	pionY := float32(startY-globalTileSize/2) - 20 // Juste au-dessus de la grille
+
+	// Afficher le pion du joueur actif (au-dessus de la grille)
+	pionAdversaireX := float32(startX + globalTileSize/2 + g.adversaryTokenPosition*globalTileSize)
+	pionAdversaireY := float32(startY-globalTileSize/2) - 20 // Juste au-dessus de la grille
+
+	if pionX == pionAdversaireX {
+		sizeP1 = -1.0
+		sizeP2 = 5.0
+	} else {
+		sizeP1 = 0.0
+		sizeP2 = 0.0
+	}
+
+	vector.DrawFilledCircle(
+		screen,
+		pionAdversaireX,
+		pionAdversaireY,
+		float32(globalTileSize/2-globalCircleMargin)+float32(sizeP2),
+		globalTokenColors[g.p2Color],
+		true,
+	)
+
 	vector.DrawFilledCircle(
 		screen,
 		pionX,
 		pionY,
-		float32(globalTileSize/2-globalCircleMargin),
+		float32(globalTileSize/2-globalCircleMargin)+float32(sizeP1),
+		globalTextColor,
+		true,
+	)
+
+	vector.DrawFilledCircle(
+		screen,
+		pionX,
+		pionY,
+		float32(globalTileSize/2-globalCircleMargin)+float32(sizeP1)-5,
 		globalTokenColors[g.p1Color],
 		true,
 	)
@@ -294,13 +378,23 @@ func (g game) playDraw(screen *ebiten.Image) {
 	if !g.restartOk {
 		g.errorMessageDisplay(screen, "En attente de l'autre joueur")
 	}
+
+	if g.chatIsFocus {
+		g.drawChat(screen)
+		g.drawCloseButton(screen)
+	} else {
+		g.drawChatButton(screen)
+	}
 }
 
 // Affichage des graphismes à l'écran des résultats.
 func (g game) resultDraw(screen *ebiten.Image) {
+
+	g.drawScore(screen)
+	g.drawReplayButton(screen)
 	// Centrer la grille
 	g.drawGrid(offScreenImage)
-	g.topMenuRejouer(screen)
+	g.topMenuButton(screen, "REJOUER")
 
 	// Appliquer un effet d'atténuation
 	options := &ebiten.DrawImageOptions{}
@@ -352,9 +446,17 @@ func (g game) resultDraw(screen *ebiten.Image) {
 		text.Draw(screen, msg, smallFont, textX, textY, globalTextColorBright)
 	}
 
+	if g.chatIsFocus {
+		g.drawChat(screen)
+		g.drawCloseButton(screen)
+	} else {
+		g.drawChatButton(screen)
+	}
+
 }
 
 func (g game) drawGrid(screen *ebiten.Image) {
+
 	// Calculer la position et les dimensions de la grille
 	gridWidth := globalTileSize * globalNumTilesX
 	gridHeight := globalTileSize * globalNumTilesY
@@ -398,5 +500,123 @@ func (g game) drawGrid(screen *ebiten.Image) {
 				true,
 			)
 		}
+	}
+
+}
+
+func (g *game) DrawShifumi(screen *ebiten.Image) {
+	if pierreImg == nil || papierImg == nil || ciseauxImg == nil {
+		log.Println("Une ou plusieurs images ne sont pas chargées.")
+		return
+	}
+
+	// Calculer la position de départ pour centrer les images
+	scale := 0.5                                           // Facteur d'échelle pour les images
+	imageWidth := float64(pierreImg.Bounds().Dx()) * scale // Largeur d'une image mise à l'échelle
+	spacing := 50.0                                        // Espace entre les images
+	totalWidth := imageWidth*3 + spacing*2                 // Largeur totale de toutes les images
+	startX := (float64(globalWidth) - totalWidth) / 2      // Position X de départ
+	startY := float64(globalHeight - 450)                  // Position Y de départ pour les images
+
+	// Dessiner Pierre
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Scale(scale, scale)
+	op.GeoM.Translate(startX, startY)
+	screen.DrawImage(pierreImg, op)
+
+	// Dessiner Papier
+	op = &ebiten.DrawImageOptions{}
+	op.GeoM.Scale(scale, scale)
+	op.GeoM.Translate(startX+imageWidth+spacing, startY)
+	screen.DrawImage(papierImg, op)
+
+	// Dessiner Ciseaux
+	op = &ebiten.DrawImageOptions{}
+	op.GeoM.Scale(scale, scale)
+	op.GeoM.Translate(startX+2*(imageWidth+spacing), startY)
+	screen.DrawImage(ciseauxImg, op)
+
+	message := "Choix du coup"
+	textWidth, _ := getTextDimensions(message, firstTitleSmallFont)
+	textX := (globalWidth - textWidth) / 2
+	textY := globalHeight/2 - 200
+	text.Draw(screen, message, firstTitleSmallFont, textX, textY, globalTextColorYellow)
+
+	// Afficher le losange au-dessus de l'image sélectionnée
+	if g.selected != "" {
+		var selectedX float64
+
+		// Déterminer la position X du centre de l'image sélectionnée
+		switch g.selected {
+		case "Pierre":
+			selectedX = startX + (imageWidth / 2)
+		case "Papier":
+			selectedX = startX + imageWidth + spacing + (imageWidth / 2)
+		case "Ciseaux":
+			selectedX = startX + 2*(imageWidth+spacing) + (imageWidth / 2)
+		}
+
+		// Calculer la position du losange
+		losangeScale := scale
+		losangeWidth := float64(losangeImg.Bounds().Dx()) * losangeScale
+		losangeX := selectedX - (losangeWidth / 2)
+		losangeY := float64(globalHeight - 500) // 10 pixels d'espace entre le losange et l'image
+
+		// Dessiner le losange
+		opLosange := &ebiten.DrawImageOptions{}
+		opLosange.GeoM.Scale(losangeScale, losangeScale)
+		opLosange.GeoM.Translate(losangeX, losangeY)
+		screen.DrawImage(losangeImg, opLosange)
+	}
+
+	// Afficher le résultat du shifumi si disponible
+	if g.showShifumiResult {
+		var textColor color.Color
+		switch g.shifumiResult {
+		case "Gagné":
+			textColor = globalTextColorGreen
+		case "Perdu":
+			textColor = globalTextRed
+		default:
+			textColor = globalTextColorYellow
+		}
+
+		// Afficher le choix de l'adversaire
+		adversaryText := "Choix de l'adversaire : " + g.adversaryChoice
+		bounds := text.BoundString(smallFont, adversaryText)
+		x := (globalWidth - bounds.Dx()) / 2
+		text.Draw(screen, adversaryText, smallFont, x, int(startY)-50, globalTextColorBright)
+
+		// Afficher le résultat
+		resultText := g.shifumiResult
+		bounds = text.BoundString(largeFont, resultText)
+		x = (globalWidth - bounds.Dx()) / 2
+		text.Draw(screen, resultText, largeFont, x, int(startY)-20, textColor)
+	}
+}
+
+func (g *game) handleMouseClick(x, y int) {
+	if g.gameState == shifumiState {
+		scale := 0.5                                           // Facteur d'échelle pour les images
+		imageWidth := float64(pierreImg.Bounds().Dx()) * scale // Largeur d'une image mise à l'échelle
+		spacing := 50.0
+		startX := (float64(globalWidth) - (imageWidth*3 + spacing*2)) / 2
+		startY := globalHeight - 450 // Position Y de départ pour les images
+
+		// Vérifier si l'utilisateur a cliqué sur l'image Pierre
+		if x >= int(startX) && x <= int(startX+imageWidth) && y >= startY && y <= startY+int(float64(pierreImg.Bounds().Dy())) {
+			g.selected = "Pierre"
+		}
+
+		// Vérifier si l'utilisateur a cliqué sur l'image Papier
+		if x >= int(startX+imageWidth+spacing) && x <= int(startX+imageWidth+spacing+imageWidth) && y >= startY && y <= startY+int(float64(papierImg.Bounds().Dy())) {
+			g.selected = "Papier"
+		}
+
+		// Vérifier si l'utilisateur a cliqué sur l'image Ciseaux
+		if x >= int(startX+2*(imageWidth+spacing)) && x <= int(startX+2*(imageWidth+spacing)+imageWidth) && y >= startY && y <= startY+int(float64(ciseauxImg.Bounds().Dy())) {
+			g.selected = "Ciseaux"
+		}
+		log.Print(g.selected)
 	}
 }

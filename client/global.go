@@ -9,7 +9,6 @@ import (
 
 // Constantes définissant les paramètres généraux du programme.
 const (
-	globalTileSize        = 70
 	globalNumTilesX       = 7
 	globalNumTilesY       = 6
 	globalCircleMargin    = 5
@@ -17,17 +16,18 @@ const (
 	globalNumColorLine    = 3
 	globalNumColorCol     = 3
 	globalNumColor        = globalNumColorLine * globalNumColorCol
-	iconScale             = 0.20
 	fadeInDuration        = 200
 	holdDuration          = 120
 	fadeOutDuration       = 250
 	invisibleHoldDuration = 100
-	sampleRate            = 44100
 	largeRectHeight       = 80
+	messageWidth          = 400 // Largeur maximale de la zone des messages
+	inputMaxWidth         = 700 // Largeur maximale de la zone de saisie
 )
 
 // Variables définissant les paramètres généraux du programme.
 var (
+	globalTileSize                                   = 70
 	globalBackgroundColor                color.Color = color.NRGBA{R: 100, G: 100, B: 100, A: 255}
 	globalGridColor                      color.Color = color.NRGBA{R: 119, G: 136, B: 153, A: 255}
 	globalTextColor                      color.Color = color.NRGBA{R: 25, G: 25, B: 25, A: 255}
@@ -52,6 +52,7 @@ var (
 	firstTitleFont                       font.Face
 	firstTitleSmallFont                  font.Face
 	firstTitleSmallerFont                font.Face
+	firstTitleMinusFont                  font.Face
 	globalTokenColors                    [globalNumColor]color.Color = [globalNumColor]color.Color{
 		color.NRGBA{R: 255, G: 239, B: 213, A: 255}, // Pêche pastel
 		color.NRGBA{R: 119, G: 221, B: 153, A: 255}, // Vert menthe pastel
@@ -64,19 +65,35 @@ var (
 		color.NRGBA{R: 245, G: 255, B: 250, A: 255}, // Blanc cassé pastel
 	}
 
-	globalBackgroundImage *ebiten.Image
-	offScreenImage        *ebiten.Image
-	iconFullscreen        *ebiten.Image
-	iconWindowed          *ebiten.Image
-	iconIUT               *ebiten.Image
-	logoStudio            *ebiten.Image
-	globalWidth           = 1920
-	globalHeight          = 1080
-	baseFontSizeError     float64
-	baseFontSizeSmall     float64
-	baseFontSizeLarge     float64
-	baseFontSizeBig       float64
-	baseFontTitle         float64
+	background1       *ebiten.Image
+	background2       *ebiten.Image
+	background3       *ebiten.Image
+	leftArrowImage    *ebiten.Image
+	rightArrowImage   *ebiten.Image
+	offScreenImage    *ebiten.Image
+	iconFullscreen    *ebiten.Image
+	iconWindowed      *ebiten.Image
+	iconIUT           *ebiten.Image
+	logoStudio        *ebiten.Image
+	replay            *ebiten.Image
+	Themes            *ebiten.Image
+	chat              *ebiten.Image
+	close             *ebiten.Image
+	chatWarning       *ebiten.Image
+	pierreImg              *ebiten.Image
+	papierImg              *ebiten.Image
+	ciseauxImg             *ebiten.Image
+	losangeImg             *ebiten.Image
+	globalWidth       = 1920
+	globalHeight      = 1080
+	baseFontSizeError float64
+	baseFontSizeSmall float64
+	baseFontSizeLarge float64
+	baseFontSizeBig   float64
+	baseFontTitle     float64
+	sizeP1            = 0.0
+	sizeP2            = 0.0
+	history           = make(map[int]Coordinate)
 )
 
 type Message struct {
@@ -91,4 +108,14 @@ type ColorPayload struct {
 type MovePayload struct {
 	X int `json:"x"`
 	Y int `json:"y"`
+}
+
+type Coordinate struct {
+	ID int
+	X  int
+	Y  int
+}
+
+type ChatMessage struct {
+	Text string `json:"text"`
 }

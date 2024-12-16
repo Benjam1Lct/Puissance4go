@@ -1,15 +1,14 @@
 package main
 
 import (
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/audio"
-	"github.com/hajimehoshi/ebiten/v2/audio/mp3"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"golang.org/x/image/font"
-	"golang.org/x/image/font/opentype"
 	"io"
 	"log"
 	"os"
+
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/opentype"
 )
 
 func loadFont(path string, size float64, scaleFactor float64) font.Face {
@@ -80,6 +79,7 @@ func initFonts() {
 	boldFontLarge = loadFont("assets/fonts/Hind/HindMysuru-Bold.ttf", baseFontSizeLarge, scaleFactor)
 	bigFontResult = loadFont("assets/fonts/Hind/HindMysuru-Bold.ttf", baseFontSizeBig, scaleFactor)
 
+	firstTitleMinusFont = loadFont("assets/fonts/Valorant.ttf", baseFontSizeSmall, scaleFactor)
 	firstTitleFont = loadFont("assets/fonts/Valorant.ttf", baseFontTitle, scaleFactor)
 	firstTitleSmallFont = loadFont("assets/fonts/Valorant.ttf", baseFontSizeBig, scaleFactor)
 	firstTitleSmallerFont = loadFont("assets/fonts/Valorant.ttf", baseFontSizeLarge, scaleFactor)
@@ -123,7 +123,7 @@ func initImage() {
 		log.Fatal(err)
 	}
 
-	// Charger l'icône pour le mode fenêtré
+	// Charger l'icône de l'iut
 	iutFile, err := os.Open("assets/images/logoIUT-Blanc.png")
 	if err != nil {
 		log.Fatal(err)
@@ -139,7 +139,7 @@ func initImage() {
 		log.Fatal(err)
 	}
 
-	// Charger l'icône pour le mode fenêtré
+	// Charger l'icône du studio
 	logoStudioFile, err := os.Open("assets/images/logoStudio.png")
 	if err != nil {
 		log.Fatal(err)
@@ -154,21 +154,223 @@ func initImage() {
 	if err != nil {
 		log.Fatal(err)
 	}
-}
 
-func initBackground() {
-	// Charger l'icône pour le mode plein écran
-	background, err := os.Open("assets/images/background.png")
+	// Charger l'icône de son on
+	replayFile, err := os.Open("assets/images/replay.png")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func(fullscreenFile *os.File) {
-		err := fullscreenFile.Close()
+	defer func(replayFile *os.File) {
+		err := replayFile.Close()
 		if err != nil {
 			log.Fatal(err)
 		}
-	}(background)
-	globalBackgroundImage, _, err = ebitenutil.NewImageFromReader(background)
+	}(replayFile)
+	replay, _, err = ebitenutil.NewImageFromReader(replayFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Charger l'icône des themes
+	ThemesFile, err := os.Open("assets/images/theme.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(ThemesFile *os.File) {
+		err := ThemesFile.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(ThemesFile)
+	Themes, _, err = ebitenutil.NewImageFromReader(ThemesFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Charger l'icône des themes
+	leftArrowImageFile, err := os.Open("assets/images/left.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(leftArrowImageFile *os.File) {
+		err := leftArrowImageFile.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(leftArrowImageFile)
+	leftArrowImage, _, err = ebitenutil.NewImageFromReader(leftArrowImageFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Charger l'icône des themes
+	rightArrowImageFile, err := os.Open("assets/images/right.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(rightArrowImageFile *os.File) {
+		err := rightArrowImageFile.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(rightArrowImageFile)
+	rightArrowImage, _, err = ebitenutil.NewImageFromReader(rightArrowImageFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Charger l'icône du chat
+	chatFile, err := os.Open("assets/images/chat.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(chatFile *os.File) {
+		err := chatFile.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(chatFile)
+	chat, _, err = ebitenutil.NewImageFromReader(chatFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Charger l'icône du chat
+	chatWarningFile, err := os.Open("assets/images/chatWarning.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(chatWarningFile *os.File) {
+		err := chatWarningFile.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(chatWarningFile)
+	chatWarning, _, err = ebitenutil.NewImageFromReader(chatWarningFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Charger l'icône pour close
+	closeFile, err := os.Open("assets/images/close.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(closeFile *os.File) {
+		err := closeFile.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(closeFile)
+	close, _, err = ebitenutil.NewImageFromReader(closeFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	pierreImage, err := os.Open("assets/images/pierre.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(pierreImage *os.File) {
+		err := pierreImage.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(pierreImage)
+	pierreImg, _, err = ebitenutil.NewImageFromReader(pierreImage)
+	if err != nil {
+		log.Fatal(err)
+	}
+	papierImage, err := os.Open("assets/images/papier.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(papierImage *os.File) {
+		err := papierImage.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(papierImage)
+	papierImg, _, err = ebitenutil.NewImageFromReader(papierImage)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Charger ciseaux image
+	ciseauxImage, err := os.Open("assets/images/ciseaux.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(ciseauxImage *os.File) {
+		err := ciseauxImage.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(ciseauxImage)
+	ciseauxImg, _, err = ebitenutil.NewImageFromReader(ciseauxImage)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func initBackground() {
+	// Charger un fond d'ecran
+	background1File, err := os.Open("assets/images/background/background1.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(background1File *os.File) {
+		err := background1File.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(background1File)
+	background1, _, err = ebitenutil.NewImageFromReader(background1File)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Charger un fond d'ecran
+	background2File, err := os.Open("assets/images/background/background2.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(background2File *os.File) {
+		err := background2File.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(background2File)
+	background2, _, err = ebitenutil.NewImageFromReader(background2File)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Charger un fond d'ecran
+	background3File, err := os.Open("assets/images/background/background3.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(background3File *os.File) {
+		err := background3File.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(background3File)
+	background3, _, err = ebitenutil.NewImageFromReader(background3File)
+	if err != nil {
+		log.Fatal(err)
+	}
+	//
+	losangeImage, err := os.Open("assets/images/losange.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func(losangeImage *os.File) {
+		err := losangeImage.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(losangeImage)
+	losangeImg, _, err = ebitenutil.NewImageFromReader(losangeImage)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -185,6 +387,11 @@ func initResolution(isFullscreen bool) {
 		screenWidth, screenHeight := ebiten.ScreenSizeInFullscreen()
 		globalHeight = screenHeight
 		globalWidth = screenWidth
+		if globalWidth >= 1920 && globalHeight >= 1080 {
+			globalTileSize = 100
+		} else {
+			globalTileSize = 70
+		}
 		ebiten.SetFullscreen(true)
 	} else {
 		adjustGlobalDimensions()
@@ -209,6 +416,7 @@ func adjustGlobalDimensions() {
 			globalWidth = 1280
 			globalHeight = 720
 		}
+
 		screenWidth, screenHeight := ebiten.ScreenSizeInFullscreen()
 		windowWidth, windowHeight := globalWidth, globalHeight
 
@@ -219,47 +427,23 @@ func adjustGlobalDimensions() {
 		// Positionner la fenêtre
 		ebiten.SetWindowPosition(centerX, centerY)
 	}
+
+	if globalWidth >= 1920 && globalHeight >= 1080 {
+		globalTileSize = 100
+	} else {
+		globalTileSize = 70
+	}
 }
 
-func (g *game) initAudio() {
-	// Créer un contexte audio
-	audioContext := audio.NewContext(sampleRate)
-	g.audioContext = audioContext
-
-	// Charger le fichier audio
-	file, err := os.Open("assets/musics/bo.mp3") // Chemin vers votre fichier audio
-	if err != nil {
-		log.Fatalf("Impossible d'ouvrir le fichier audio: %v", err)
-	}
-
-	// Décoder le fichier audio
-	stream, err := mp3.DecodeWithSampleRate(sampleRate, file)
-	if err != nil {
-		log.Fatalf("Impossible de décoder le fichier audio: %v", err)
-	}
-
-	// Créer un lecteur en boucle
-	loop := audio.NewInfiniteLoop(stream, stream.Length())
-	player, err := audioContext.NewPlayer(loop)
-	if err != nil {
-		log.Fatalf("Impossible de créer le lecteur audio: %v", err)
-	}
-
-	// Lancer la musique
-	player.Play()
-
-	// Stocker le lecteur dans la struct pour une utilisation future
-	g.audioPlayer = player
-
-	// Stocker le fichier pour le fermer proprement plus tard
-	g.audioFile = file
-}
-
-func (g *game) closeAudio() {
-	if g.audioFile != nil {
-		g.audioFile.Close()
-	}
-	if g.audioPlayer != nil {
-		g.audioPlayer.Close()
-	}
+func (g *game) initGame() {
+	g.gameState = introStateLogo
+	g.chatNewMessage = false
+	g.stateFrame = 0
+	g.restartOk = true
+	g.p2Color = -1
+	g.p1ColorValidate = -1
+	g.playerID = -1
+	g.adversaryTokenPosition = g.tokenPosition
+	g.isReset = false
+	g.mouseReleased = true
 }

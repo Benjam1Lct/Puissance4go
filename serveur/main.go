@@ -12,17 +12,14 @@ import (
 
 func main() {
 
-	// Définir un port par défaut
-	defaultPort := "8080"
-
 	// Demander à l'utilisateur un port via le terminal
-	fmt.Printf("Entrez le port du serveur [par defaut: %s] : ", defaultPort)
+	fmt.Printf("Entrez le port du serveur [par defaut: %s] : ", DefaultPort)
 	reader := bufio.NewReader(os.Stdin)
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(input) // Supprimer les espaces ou sauts de ligne
 
 	// Utiliser le port par défaut si aucun input n'est fourni
-	port := defaultPort
+	port := DefaultPort
 	if input != "" {
 		if _, err := strconv.Atoi(input); err == nil {
 			port = input
@@ -45,6 +42,8 @@ func main() {
 	// Afficher l'IP et le port du serveur
 	log.Printf("Serveur démarré. Adresse : %s:%s\n", localIP, port)
 	log.Println("En attente de connexions...")
+
+	waitForRestart()
 
 	startServer(listener)
 }
